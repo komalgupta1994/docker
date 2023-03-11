@@ -1,0 +1,35 @@
+sudo: required
+services:
+  - docker
+
+before_install:
+  - docker build -t kamligupta/react-test -f ./client/Dockerfile.dev ./client
+
+script:
+  - docker run kamligupta/react-test npm test -- --coverage
+
+after_success:
+  - docker build -t kamligupta/multi-client ./client
+  - docker build -t kamligupta/multi-nginx ./nginx
+  - docker build -t kamligupta/multi-server ./server
+  - docker build -t kamligupta/multi-worker ./worker
+  # Log in to the docker CLI, DOCCKER_PASSWORD and DOCKER_ID are keys, which were set inside the travis CI environment, due to security purpose
+  - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_ID" --password-stdin
+  #Take the image and push to Docker hub
+  - docker push kamligupta/multi-client
+  - docker push kamligupta/multi-nginx
+  - docker push kamligupta/multi-server
+  - docker push kamligupta/multi-worker
+
+  deploy:
+    provider: elasticbeanstalk
+    region: us-west-1 #AWS region where we create elastic beanstalk resource
+    app: multi-docker
+    env: Multidocker-env
+    bucket_name: bucket-name #S3 bucket name for EB
+    bucket-path: docker-multi
+    on:
+      branch: master
+    access_key_id: $AWS_ACCESS_KEY #access key define in travis env 
+    secret_access_key:
+      secure: $AWS_SECRET_KEY
